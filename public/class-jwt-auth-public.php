@@ -84,23 +84,23 @@ class Jwt_Auth_Public
     }
 
     /**
-     * Add CORs suppot to the request.
+     * Augment headers to be allowed in REST requests
+     *
+     * @param array $headers
+     *
+     * @return array
      */
-    public function add_cors_support()
-    {
-        $enable_cors = defined('JWT_AUTH_CORS_ENABLE') ? JWT_AUTH_CORS_ENABLE : false;
-        if ($enable_cors) {
-            $headers = apply_filters('jwt_auth_cors_allow_headers', 'Access-Control-Allow-Headers, Content-Type, Authorization');
-            header(sprintf('Access-Control-Allow-Headers: %s', $headers));
-        }
+    public function allow_headers($headers) {
+        $headers[] = 'X-Authorization';
+        return $headers;
     }
 
     /**
      * Get the user and password in the request body and generate a JWT
      *
-     * @param [type] $request [description]
+     * @param mixed $request
      *
-     * @return [type] [description]
+     * @return mixed|void|WP_Error
      */
     public function generate_token($request)
     {
@@ -171,7 +171,7 @@ class Jwt_Auth_Public
      *
      * @param (int|bool) $user Logged User ID
      *
-     * @return (int|bool)
+     * @return mixed
      */
     public function determine_current_user($user)
     {
@@ -194,7 +194,7 @@ class Jwt_Auth_Public
          */
         $validate_uri = strpos($_SERVER['REQUEST_URI'], 'token/validate');
         if ($validate_uri > 0) {
-            return $user;
+	        return $user;
         }
 
         $token = $this->validate_token(false);
@@ -218,7 +218,7 @@ class Jwt_Auth_Public
      *
      * @param bool $output
      *
-     * @return WP_Error | Object | Array
+     * @return WP_Error | Object | array
      */
     public function validate_token($output = true)
     {
@@ -231,6 +231,10 @@ class Jwt_Auth_Public
         /* Double check for different auth header string (server dependent) */
         if (!$auth) {
             $auth = isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : false;
+        }
+
+        if (!$auth) {
+            $auth = isset($_SERVER['HTTP_X_AUTHORIZATION']) ? $_SERVER['HTTP_X_AUTHORIZATION'] : false;
         }
 
         if (!$auth) {
@@ -319,10 +323,11 @@ class Jwt_Auth_Public
     }
 
     /**
-     * Filter to hook the rest_pre_dispatch, if the is an error in the request
+     * Filter to hook the rest_pre_dispatch, if there is an error in the request
      * send it, if there is no error just continue with the current request.
      *
      * @param $request
+     * @return WP_Error | null
      */
     public function rest_pre_dispatch($request)
     {
