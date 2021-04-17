@@ -319,7 +319,7 @@ class Jwt_Auth_Public
           )
         );
       } else {
-        $this->returnTokenByOutput($dartcart_token, $output);
+        $this->returnTokenByOutput($token, $output);
       }
     }
   }
