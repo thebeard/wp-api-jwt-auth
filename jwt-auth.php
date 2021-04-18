@@ -13,7 +13,7 @@
  *
  * @wordpress-plugin
  * Plugin Name:       JWT Authentication for WP-API
- * Plugin URI:        https://enriquechavez.co
+ * Plugin URI:        https://github.com/thebeard/wp-api-jwt-auth
  * Description:       Extends the WP REST API using JSON Web Tokens Authentication as an authentication method.
  * Version:           1.2.6
  * Author:            Enrique Chavez
@@ -22,11 +22,12 @@
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       jwt-auth
  * Domain Path:       /languages
+ * GitHub Plugin URI: https://github.com/thebeard/wp-api-jwt-auth
  */
 
 // If this file is called directly, abort.
 if (!defined('WPINC')) {
-    die;
+  die;
 }
 
 /**
@@ -46,7 +47,7 @@ require plugin_dir_path(__FILE__) . 'includes/class-jwt-auth.php';
  */
 function run_jwt_auth()
 {
-    $plugin = new Jwt_Auth();
-    $plugin->run();
+  $plugin = new Jwt_Auth();
+  $plugin->run();
 }
 run_jwt_auth();
