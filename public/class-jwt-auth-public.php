@@ -135,36 +135,7 @@ class Jwt_Auth_Public
       );
     }
 
-    /** Valid credentials, the user exists create the according Token */
-    $issuedAt = time();
-    $notBefore = apply_filters('jwt_auth_not_before', $issuedAt, $issuedAt);
-    $expire = apply_filters('jwt_auth_expire', $issuedAt + (DAY_IN_SECONDS * 7), $issuedAt);
-
-    $token = array(
-      'iss' => get_bloginfo('url'),
-      'iat' => $issuedAt,
-      'nbf' => $notBefore,
-      'exp' => $expire,
-      'data' => array(
-        'user' => array(
-          'id' => $user->data->ID,
-        ),
-      ),
-    );
-
-    /** Let the user modify the token data before the sign. */
-    $token = JWT::encode(apply_filters('jwt_auth_token_before_sign', $token, $user), $secret_key);
-
-    /** The token is signed, now create the object with no sensible user data to the client*/
-    $data = array(
-      'token' => $token,
-      'user_email' => $user->data->user_email,
-      'user_nicename' => $user->data->user_nicename,
-      'user_display_name' => $user->data->display_name,
-    );
-
-    /** Let the user modify the data before send it back */
-    return apply_filters('jwt_auth_token_before_dispatch', $data, $user);
+    return $this->generate_jwt_token($user);
   }
 
   /**
@@ -199,7 +170,7 @@ class Jwt_Auth_Public
       return $user;
     }
 
-    $token = $this->validate_token(false);
+    $token = $this->validate_token(true);
 
     if (is_wp_error($token)) {
       if ($token->get_error_code() != 'jwt_auth_no_auth_header') {
@@ -218,16 +189,17 @@ class Jwt_Auth_Public
    * Main validation function, this function try to get the Autentication
    * headers and decoded.
    *
-   * @param bool $output
+   * @param WP_REST_Request|bool $decoded
    *
    * @return WP_Error | Object | array
    */
-  public function validate_token($output = true)
+  public function validate_token($decoded = false)
   {
-    /*
-         * Looking for the HTTP_AUTHORIZATION header, if not present just
-         * return the user.
-         */
+    if (is_a($decoded, 'WP_REST_Request')) {
+      $decoded = false;
+    }
+
+    // Looking for the HTTP_AUTHORIZATION header, if not present just return the user.
     $auth = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : false;
 
     /* Double check for different auth header string (server dependent) */
@@ -301,16 +273,16 @@ class Jwt_Auth_Public
           )
         );
       }
-      /** Everything looks good return the decoded token if the $output is false */
-      $this->returnTokenByOutput($dartcart_token, $output);
+
+      return $this->returnTokenByCodePhase($token, $dartcart_token, $decoded);
     } catch (Exception $e) {
       // @todo Can we remove this add_filter
       add_filter("dartcart_jwt_token_validation", function () {
         return null;
       }, 1, 0);
-      $token = apply_filters("dartcart_jwt_token_validation", null, $token);
+      $dartcart_token = apply_filters("dartcart_jwt_token_validation", null, $token);
 
-      if (!$token) {
+      if (!$dartcart_token) {
         return new WP_Error(
           'jwt_auth_invalid_token',
           $e->getMessage(),
@@ -319,7 +291,9 @@ class Jwt_Auth_Public
           )
         );
       } else {
-        $this->returnTokenByOutput($token, $output);
+        $user = get_user_by('id', $dartcart_token->data->user->id);
+        $token = $this->generate_jwt_token($user);
+        return $this->returnTokenByCodePhase($token['token'], $dartcart_token, $decoded);
       }
     }
   }
@@ -340,24 +314,62 @@ class Jwt_Auth_Public
   }
 
   /**
-   * Given the output return token or successful rest response
+   * Generate a token for the user in argument
+   *
+   * @param WP_User $user
+   *
+   * @return mixed
+   */
+  private function generate_jwt_token($user)
+  {
+    $secret_key = defined('JWT_AUTH_SECRET_KEY') ? JWT_AUTH_SECRET_KEY : false;
+    if (!$secret_key) {
+      return null;
+    }
+
+    /** Valid credentials, the user exists create the according Token */
+    $issuedAt = time();
+    $notBefore = apply_filters('jwt_auth_not_before', $issuedAt, $issuedAt);
+    $expire = apply_filters('jwt_auth_expire', $issuedAt + (DAY_IN_SECONDS * 7), $issuedAt);
+
+    $token = array(
+      'iss' => get_bloginfo('url'),
+      'iat' => $issuedAt,
+      'nbf' => $notBefore,
+      'exp' => $expire,
+      'data' => array(
+        'user' => array(
+          'id' => $user->data->ID,
+        ),
+      ),
+    );
+
+    /** Let the user modify the token data before the sign. */
+    $token = JWT::encode(apply_filters('jwt_auth_token_before_sign', $token, $user), $secret_key);
+
+    /** The token is signed, now create the object with no sensible user data to the client*/
+    $data = array(
+      'token' => $token,
+      'user_email' => $user->data->user_email,
+      'user_nicename' => $user->data->user_nicename,
+      'user_display_name' => $user->data->display_name,
+    );
+
+    /** Let the user modify the data before send it back */
+    return apply_filters('jwt_auth_token_before_dispatch', $data, $user);
+  }
+
+  /**
+   * Return encoded or decoded token by third boolean parameter
    * 
-   * @param $token
-   * @param $output
+   * @param $encoded_token  string
+   * @param $decoded_token  mixed
+   * @param $decoded        boolean
    * 
    * @return mixed | null
    */
-  private function returnTokenByOutput($token, $output)
+  private function returnTokenByCodePhase($encoded_token, $decoded_token, $decoded)
   {
-    if (!$output) {
-      return $token;
-    }
-    /** If the output is true return an answer to the request to show it */
-    return array(
-      'code' => 'jwt_auth_valid_token',
-      'data' => array(
-        'status' => 200,
-      ),
-    );
+    return $decoded ? $decoded_token : ["token" => $encoded_token];
   }
 }
