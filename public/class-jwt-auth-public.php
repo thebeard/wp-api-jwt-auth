@@ -362,7 +362,11 @@ class Jwt_Auth_Public
     /** Let the user modify the token data before the sign. */
     $token = JWT::encode(apply_filters('jwt_auth_token_before_sign', $token, $user), $secret_key);
 
-    $this->log("generate_jwt_token | token : " . print_r($token, true));
+    $decoded_token_debugging = JWT::decode($token, $secret_key, array('HS256'));
+
+    $this->log("generate_jwt_token | token decoded : " . print_r($decoded_token_debugging, true));
+
+    $this->log("generate_jwt_token | token encoded : " . $token, true);
 
     /** The token is signed, now create the object with no sensible user data to the client*/
     $data = array(
