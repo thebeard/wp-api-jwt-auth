@@ -196,8 +196,10 @@ class Jwt_Auth_Public
   public function validate_token($decoded = false)
   {
     if (is_a($decoded, 'WP_REST_Request')) {
+      $this->log("validate_token | on url : " . $decoded->get_route());
       $decoded = false;
     }
+    $this->log("validate_token | decoded " . $decoded ? 'true' : 'false');
 
     // Looking for the HTTP_AUTHORIZATION header, if not present just return the user.
     $auth = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : false;
@@ -250,9 +252,12 @@ class Jwt_Auth_Public
 
     /** Try to decode the token */
     try {
+      $this->log("validate_token | try ");
       $dartcart_token = JWT::decode($token, $secret_key, array('HS256'));
+      $this->log("validate_token | try | dartcart_token : " . print_r($dartcart_token, true));
       /** The Token is decoded now validate the iss */
       if ($dartcart_token->iss != get_bloginfo('url')) {
+        $this->log("validate_token | try | if iss inconsistent : " . $dartcart_token->iss);
         /** The iss do not match, return error */
         return new WP_Error(
           'jwt_auth_bad_iss',
@@ -265,6 +270,7 @@ class Jwt_Auth_Public
       /** So far so good, validate the user id in the token */
       if (!isset($dartcart_token->data->user->id)) {
         /** No user id in the token, abort!! */
+        $this->log("validate_token | try | if no id : " . $dartcart_token->data->user->id);
         return new WP_Error(
           'jwt_auth_bad_request',
           'User ID not found in the token',
@@ -282,7 +288,10 @@ class Jwt_Auth_Public
       }, 1, 0);
       $dartcart_token = apply_filters("dartcart_jwt_token_validation", null, $token);
 
+      $this->log("validate_token | catch | dartcart_token : " . print_r($dartcart_token, true));
+
       if (!$dartcart_token) {
+        $this->log("validate_token | catch | if no token: reached");
         return new WP_Error(
           'jwt_auth_invalid_token',
           $e->getMessage(),
@@ -293,6 +302,8 @@ class Jwt_Auth_Public
       } else {
         $user = get_user_by('id', $dartcart_token->data->user->id);
         $token = $this->generate_jwt_token($user);
+        $this->log("validate_token | catch | token : " . print_r($token, true));
+
         return $this->returnTokenByCodePhase($token['token'], $dartcart_token, $decoded);
       }
     }
@@ -322,6 +333,8 @@ class Jwt_Auth_Public
    */
   private function generate_jwt_token($user)
   {
+    $this->log("generate_jwt_token | user : " . print_r($user, true));
+
     $secret_key = defined('JWT_AUTH_SECRET_KEY') ? JWT_AUTH_SECRET_KEY : false;
     if (!$secret_key) {
       return null;
@@ -344,8 +357,12 @@ class Jwt_Auth_Public
       ),
     );
 
+    $this->log("generate_jwt_token | token array : " . print_r($token, true));
+
     /** Let the user modify the token data before the sign. */
     $token = JWT::encode(apply_filters('jwt_auth_token_before_sign', $token, $user), $secret_key);
+
+    $this->log("generate_jwt_token | token : " . print_r($token, true));
 
     /** The token is signed, now create the object with no sensible user data to the client*/
     $data = array(
@@ -355,8 +372,22 @@ class Jwt_Auth_Public
       'user_display_name' => $user->data->display_name,
     );
 
+    $this->log("generate_jwt_token | data : " . print_r($data, true));
+
     /** Let the user modify the data before send it back */
     return apply_filters('jwt_auth_token_before_dispatch', $data, $user);
+  }
+
+  /**
+   * Log string if logging is enabled
+   * 
+   * @param $entry String to log
+   */
+  private function log($entry)
+  {
+    if (defined('JWT_AUTH_LOG') && JWT_AUTH_LOG === true) {
+      error_log($entry);
+    }
   }
 
   /**
